@@ -111,8 +111,12 @@ class Timekeeping extends MY_Controller
 		$this->view_data['links'] = $this->pagination->create_links();
 		$this->view_data['time_log'] = false;
 
-		if($search){
-			foreach ($search as $key => $value) {
+		// get all record
+		$get['all'] = true;
+		$all_search = $this->M_employees->get_record("timekeeping", $get);
+
+		if($all_search){
+			foreach ($all_search as $key => $value) {
 				unset($get);
 				$get['where']['timekeeping_id'] = $value->id;
 				$get['order'] = 'id';
@@ -128,8 +132,9 @@ class Timekeeping extends MY_Controller
 					$this->_msg('e','Only Admin can access this.',current_url());
 				}
 
-				if($search){
-					foreach ($search as $key => $tk) {
+				if($all_search){
+					foreach ($all_search as $key => $tk) {
+						
 						if($tk->has_total == 1){ continue; }
 						unset($get);
 						$get['where']['timekeeping_id'] = $tk->id;
@@ -143,9 +148,11 @@ class Timekeeping extends MY_Controller
 						$my_out = false;
 						$total_ready = false;
 						$count = 0;
+						$count2 = 0;
 						// vp($time_record);
 						if($time_record){
 							foreach ($time_record as $tk_file) {
+
 								$count++;
 								if($tk_file->logtype == "IN"){
 
@@ -165,6 +172,7 @@ class Timekeeping extends MY_Controller
 											$last_timeout = false;
 											$my_in = true;
 											$my_out = false;
+											$count2++;
 										}
 									}
 								}else{
@@ -176,7 +184,7 @@ class Timekeeping extends MY_Controller
 									if($count === count($time_record)){
 
 										$this->update_total_time($tk->id, $first_timein, $last_timeout);
-
+										$count2++;
 										#return values to default
 										$first_timein = false;
 										$last_timeout = false;
@@ -184,12 +192,12 @@ class Timekeeping extends MY_Controller
 										$my_out = false;
 									}
 								}
+							}
 
-								if($my_in && $my_out){
-									unset($data);
-									$data['has_total'] = 1;
-									$this->M_timekeeping->update($tk->id, $data);
-								}
+							if($count2>0){
+								unset($data);
+								$data['has_total'] = 1;
+								$rs = $this->M_timekeeping->update($tk->id, $data);
 							}
 						}
 					}
@@ -199,6 +207,44 @@ class Timekeeping extends MY_Controller
 					$this->view_data['system_message'] = "<div class='alert alert-danger'>No record found.</div>";
 				}
 			}
+
+		#PRINT
+			if($this->input->get('print') && $this->input->get('print') == "Print"){
+				$this->_print($all_search, $this->view_data['time_log']);
+			}
+	}
+
+	public function _print($search = false, $time_log = false)
+	{
+		set_time_limit(0);
+		
+		$data['search'] = $search;
+		$data['time_log'] = $time_log;
+
+		// vd($data);
+
+		if($search)
+		{
+			$html = $this->load->view('timekeeping/_print',$data,TRUE);
+			$this->load->helper('print');
+			
+			// echo $html;
+			$this->load->library('mpdf');
+			
+			$mpdf=new mPDF('','FOLIO','','',5,5,5,5,0,0); 
+
+			$mpdf->AddPage('P');
+			
+			$mpdf->WriteHTML($html);
+
+			$filname = "Timekeeping";
+			
+			$mpdf->Output($filname, "I");
+			exit(0);
+			
+		}else{
+			$this->_msg('s','No Record to Print', 'timekeeping');
+		}
 	}
 
 	public function edit_log($id = false)
@@ -206,6 +252,8 @@ class Timekeeping extends MY_Controller
 		$this->session_checker->secure_page('admin');
 		
 		if($id === false){ show_404(); }
+
+		$this->view_data['timekeeping_id'] = $id;
 
 		$rs_tkm = $this->M_timekeeping->get($id);
 		if($rs_tkm === false){ show_404(); }
@@ -217,12 +265,15 @@ class Timekeeping extends MY_Controller
 		if($this->input->post('save')){
 			
 			$time = $this->input->post('time');
+			$logtype = $this->input->post('logtype');
 			if($time){
-				$ctr++;
+				$ctr = 0;
 				foreach ($time as $tkm_file_id => $value) {
 					
 					unset($data);
 					$data['time'] = trim($value);
+					$data['logtype'] = trim($logtype[$tkm_file_id]);
+					
 					$rs = $this->M_timekeeping_file->update($tkm_file_id, $data);
 					if($rs){
 						$ctr++;
@@ -235,6 +286,89 @@ class Timekeeping extends MY_Controller
 					$this->_msg('e','Record was not saved. Please try again.', current_url());
 				}
 			}
+		}
+	}
+
+	public function create_log($id = false)
+	{
+		$this->session_checker->secure_page('admin');
+		
+		if($id === false){ show_404(); }
+
+		$this->view_data['timekeeping_id'] = $id;
+
+		$rs_tkm = $this->M_timekeeping->get($id);
+		if($rs_tkm === false){ show_404(); }
+		unset($get);
+		$get['where']['timekeeping_id'] = $id;
+		$get['order'] = 'id';
+		$get['single'] = true;
+		$tkm = $this->M_timekeeping_file->get_record(false, $get);
+		
+		if($tkm){
+			unset($data);
+			$data['empid'] = $tkm->empid;
+			$data['timekeeping_id'] = $tkm->timekeeping_id;
+			$data['date'] = $tkm->date;
+			$data['logtype'] = "IN";
+			$data['time'] = "00:00:00";
+			$rs = $this->M_timekeeping_file->insert($data);
+
+			if($rs){
+				$this->_msg('s','A new record created, you can now edit the data', 'timekeeping/edit_log/'.$id);
+			}
+		}
+		else
+		{
+			unset($data);
+			$data['empid'] = $rs_tkm->empid;
+			$data['timekeeping_id'] = $rs_tkm->id;
+			$data['date'] = $rs_tkm->date;
+			$data['logtype'] = "IN";
+			$data['time'] = "00:00:00";
+			$rs = $this->M_timekeeping_file->insert($data);
+
+			if($rs){
+				$this->_msg('s','A new record created, you can now edit the data', 'timekeeping/edit_log/'.$id);
+			}
+		}
+
+		$this->_msg('e','Error Encountered', 'timekeeping/edit_log/'.$id);
+	}
+
+	public function create_timekeeping()
+	{
+		//LOAD MODELS
+		$this->load->model('M_employees','M_timekeeping');
+
+		$this->session_checker->secure_page('admin');
+
+		$this->view_data['employee_list'] = $cl = $this->M_employees->employees_for_tk();
+
+		//PAGINATION
+		$this->view_data['system_message'] = $this->session->flashdata('system_message');
+
+		if($this->input->post('save')){
+			
+			$data = $this->input->post('data');
+			
+			// CHECK IF THE DATA IN THE DATE WAS ALREADY THERE
+			unset($get);
+			$get['where']['DATE(date)'] = $data['date'];
+			$get['where']['empid'] = $data['empid'];
+			$rs = $this->M_employees->get_record('timekeeping', $get);
+
+			if($rs){
+
+				$this->_msg('e','Time Log of that Employee at '.$data['date']. ' was already in the record. ', current_url());
+			}
+
+			$rs_add = $this->M_timekeeping->insert($data);
+
+			if($rs_add){
+				$this->_msg('s','Time record was successfully created, you are now ready to create its time log. ', 'timekeeping/edit_log/'.$rs_add['id']);
+			}
+
 		}
 	}
 

@@ -36,7 +36,11 @@
    		<?if($this->is_admin):?>
    		<?php echo form_submit('generate', 'Generate Total Hours','class="btn btn-info btn-sm"'); ?>
    		<?endif;?>
+   		<?php echo form_submit('print', 'Print','class="btn btn-primary btn-sm"'); ?>
 		<?echo form_close();?>
+		<?if($this->is_admin):?>
+		<a href="<?=site_url('timekeeping/create_timekeeping')?>" class="btn btn-sm btn-warning">Create Record</a>
+		<?endif;?>
 <br>
 	
 	<br />

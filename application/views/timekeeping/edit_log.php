@@ -1,3 +1,5 @@
+<a href="<?=site_url('timekeeping/create_log/'.$timekeeping_id)?>" class="confirm btn btn-success btn-sm">Create a log Record</a> 
+<br/><br/>
 <?=form_open('', '');?>
 <div class="table-responsive">
 	<table class="table">
@@ -7,11 +9,15 @@
 			<th>Time</th>
 		</tr>
 		<?if($tkm):?>
-
+			<?php
+				$logtype = array(
+						'IN' => 'IN',
+						'OUT' => 'OUT',
+					)
+			?>
 			<?foreach ($tkm as $key => $value):?>
-				
 				<tr>
-					<td><?=$value->logtype?></td>
+					<td><?=form_dropdown("logtype[$value->id]", $logtype, $value->logtype);?></td>
 					<td><?=$value->date?></td>
 					<td><input type="text" name="time[<?=$value->id?>]" value="<?=$value->time?>" id="time_<?=$value->id?>" size="5"></td>
 				</tr>		
